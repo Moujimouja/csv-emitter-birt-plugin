@@ -3,11 +3,14 @@ package org.eclipse.birt.report.engine.emitter.csv;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.birt.core.exception.BirtException;
 import org.eclipse.birt.report.engine.api.EngineException;
+import org.eclipse.birt.report.engine.api.IRenderOption;
 import org.eclipse.birt.report.engine.content.IBandContent;
 import org.eclipse.birt.report.engine.content.ICellContent;
 import org.eclipse.birt.report.engine.content.IElement;
@@ -24,10 +27,18 @@ import org.eclipse.birt.report.engine.emitter.EmitterUtil;
 import org.eclipse.birt.report.engine.emitter.IEmitterServices;
 import org.eclipse.birt.report.engine.ir.EngineIRConstants;
 import org.eclipse.birt.report.engine.presentation.ContentEmitterVisitor;
+import org.eclipse.birt.report.model.api.CellHandle;
+import org.eclipse.birt.report.model.api.OdaDataSetHandle;
+import org.eclipse.birt.report.model.api.ReportDesignHandle;
+import org.eclipse.birt.report.model.api.RowHandle;
+import org.eclipse.birt.report.model.api.elements.structures.OdaResultSetColumn;
+import org.eclipse.birt.report.model.elements.Cell;
+import org.eclipse.birt.report.model.elements.DataItem;
+import org.eclipse.birt.report.model.elements.OdaDataSet;
+import org.eclipse.birt.report.model.elements.interfaces.IDataItemModel;
 
 public class CSVReportEmitter extends ContentEmitterAdapter
-{	
-	
+{		
 	protected static Logger logger = Logger.getLogger( CSVReportEmitter.class.getName( ) );
 	
 	protected static final String OUTPUT_FORMAT_CSV = "csv";
@@ -42,6 +53,8 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	
 	protected IReportContent report;
 	
+	protected IRenderOption renderOption;
+	
 	protected int totalColumns;
 	
 	protected int currentColumn;
@@ -50,7 +63,15 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	
 	protected boolean isFirstPage = false;	
 	
-	protected boolean writeData = true;			
+	protected long firstTableID = -1;
+	
+	protected boolean writeData = true;
+	
+	protected Boolean showDatatypeInSecondRow;
+	
+	protected String tableToOutput;
+	
+	protected boolean outputCurrentTable;
 	
 	public CSVReportEmitter( )
 	{
@@ -62,9 +83,8 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	 */
 	public void initialize( IEmitterServices services ) throws EngineException
 	{
-		this.services = services;
-		
-		this.out = EmitterUtil.getOuputStream( services, REPORT_FILE );		
+		this.services = services;		
+		this.out = EmitterUtil.getOuputStream( services, REPORT_FILE );			
 		
 		writer = new CSVWriter( );	
 	}
@@ -72,7 +92,16 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	public void start( IReportContent report )
 	{
 		logger.log( Level.FINE,"Starting CSVReportEmitter." );
+		
 		this.report = report;
+		this.renderOption = report.getReportContext().getRenderOption();
+		this.tableToOutput= (String)renderOption.getOption(ICSVRenderOption.EXPORT_TABLE_BY_NAME);
+		
+		// Setting tableToOutput to Default as user has not set any Render Option to Output a specific Table
+		if(tableToOutput == null){
+			this.tableToOutput="Default";
+		}
+		
 		writer.open( out, "UTF-8" );
 		writer.startWriter( );
 	}
@@ -80,8 +109,10 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	public void end( IReportContent report )
 	{
 		logger.log( Level.FINE,"CSVReportEmitter end report." );
+		
 		writer.endWriter( );
 		writer.close( );
+		
 		if( out != null )
 		{
 			try
@@ -104,7 +135,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 			isFirstPage = false;
 		}else{
 			isFirstPage = true;			
-		}
+		}		
 	}
 	
 	/* (non-Javadoc)
@@ -114,22 +145,47 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	public void startLabel( ILabelContent label ) throws BirtException
 	{
 		if(isFirstPage)
-			startText( label );
-		
+			startText( label );		
 	}
 	
 	public void startTable( ITableContent table )
 	{
 		assert table != null;
-		totalColumns = table.getColumnCount();		
-	}
-	
+		totalColumns = table.getColumnCount();
+		
+		if(firstTableID == -1)
+			firstTableID = table.getInstanceID().getComponentID();		
+		
+		String currentTableName = table.getName();
+		
+		if(tableToOutput.equals("Default") && table.getInstanceID().getComponentID() == firstTableID)
+		{
+			this.outputCurrentTable=true;
+		}
+		else if(currentTableName != null && currentTableName.equals(this.tableToOutput))
+		{
+			this.outputCurrentTable=true;
+		}
+		else
+		{
+			this.outputCurrentTable=false;
+		}			
+	}	
 
 	public void startRow( IRowContent row )
 	{
 		assert row != null;
-		if ( isRowInFooter( row ) || isRowInHeaderExceptFirstHeader(row) )
+		
+		if ( isRowInFooter( row ) || isRowInHeaderExceptFirstHeader(row) || outputCurrentTable!=true)
 			writeData = false;
+		
+		// checking csv render option if set to export data type in second row of the output
+		showDatatypeInSecondRow = (Boolean)renderOption.getOption(ICSVRenderOption.SHOW_DATATYPE_IN_SECOND_ROW);
+		
+		// rowID will be 1 for the first data row, before printing the data row we need to print the datatype
+		// printDatatypeInSecondRow will be called only once
+		if ( showDatatypeInSecondRow && row.getRowID()==1)			
+			printDatatypeInSecondRow(row);				
 		
 		currentColumn = 0;		
 	}
@@ -141,8 +197,10 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 			logger.log( Level.FINE,"Skipping Hidden text" );
 			return;
 		}
+		
 		logger.log( Level.FINE,"Start text" );
 		String textValue = text.getText( );
+		
 		if ( writeData )
 		{
 			writer.text( textValue );
@@ -162,8 +220,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		if ( ( currentColumn < totalColumns )&& writeData )
 		{
 			writer.closeTag( CSVTags.TAG_COMMA );
-		}
-		
+		}		
 	}
 	
 	public void endRow( IRowContent row )
@@ -195,6 +252,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		{
 			return false;
 		}
+		
 		IBandContent band = ( IBandContent )parent;
 		if ( band.getBandType( ) == IBandContent.BAND_FOOTER )
 		{
@@ -213,12 +271,95 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		{
 			return false;
 		}
+		
 		IBandContent band = ( IBandContent )parent;
 		if ( band.getBandType( ) == IBandContent.BAND_HEADER )
 		{
 			return true;
 		}
+		
 		return false;
+	}
+	
+	private void printDatatypeInSecondRow(IRowContent row)
+	{		
+		if(writeData)
+		{			
+			// ArrayList of columns used in Table in the same order as they appear in Report Design
+			ArrayList<String> columnNamesInTableOrder = new ArrayList<String> ();
+			
+			// HashMap to contain ResultSetMetaData column and its respective DataType
+			HashMap<String,String> resultSetMetaDatacolumnsWithDataType = new HashMap<String, String>();
+			
+			ReportDesignHandle reportDesignHandle=report.getDesign().getReportDesign();
+			
+			Object obj=reportDesignHandle.getElementByID(row.getInstanceID().getComponentID());
+			
+			RowHandle rowHandle=null;
+			
+			if(obj instanceof RowHandle)
+			{
+				rowHandle=(RowHandle)obj;
+			}
+			else
+			{
+				return; //not a row handle, nothing to do
+			}
+			
+			@SuppressWarnings("unchecked")
+			ArrayList<CellHandle> cells= (ArrayList<CellHandle>)rowHandle.getCells().getContents();
+			
+			for(CellHandle cellHandle:cells)
+			{				
+				Cell cell=(Cell)cellHandle.getElement();			
+				
+				@SuppressWarnings("rawtypes")
+				ArrayList cellContents=(ArrayList)cell.getSlot(0).getContents();
+				
+				// Currently hard coded to get the first content only
+				
+				if(cellContents.get(0) instanceof DataItem)
+				{
+					DataItem cellDataItem=(DataItem)cellContents.get(0);									
+					columnNamesInTableOrder.add((String)cellDataItem.getLocalProperty(report.getDesign()
+							.getReportDesign().getModule(), IDataItemModel.RESULT_SET_COLUMN_PROP));					
+				}
+			}
+			
+			// fetching all data sets in report
+			
+			@SuppressWarnings("unchecked")
+			ArrayList<OdaDataSetHandle> odaDataSetHandles=(ArrayList<OdaDataSetHandle>)report.getDesign()
+					.getReportDesign().getAllDataSets();
+			
+			for(OdaDataSetHandle odaDataSetHandle:odaDataSetHandles)
+			{
+				OdaDataSet odaDataSet=(OdaDataSet)odaDataSetHandle.getElement();
+				@SuppressWarnings("unchecked")
+				ArrayList<OdaResultSetColumn> odaResultSetColumns=(ArrayList<OdaResultSetColumn>)odaDataSet
+						.getLocalProperty(report.getDesign().getReportDesign().getModule(), "resultSet");
+				for(OdaResultSetColumn odaResultSetColumn:odaResultSetColumns)
+				{					
+					resultSetMetaDatacolumnsWithDataType.put(odaResultSetColumn.getColumnName(), 
+							odaResultSetColumn.getDataType());
+				}
+			}
+			
+			// printing the datatype in the same order as column appearing in the report
+			for(int i=0;i<columnNamesInTableOrder.size();i++)
+			{
+				String dataType=resultSetMetaDatacolumnsWithDataType.get(columnNamesInTableOrder.get(i));
+				
+				if(dataType != null)
+					writer.print(dataType);
+				
+				if(i < columnNamesInTableOrder.size()-1)
+					writer.closeTag(CSVTags.TAG_COMMA);
+				else
+					writer.closeTag(CSVTags.TAG_CR);
+			}
+	
+		}		
 	}
 	
 }
