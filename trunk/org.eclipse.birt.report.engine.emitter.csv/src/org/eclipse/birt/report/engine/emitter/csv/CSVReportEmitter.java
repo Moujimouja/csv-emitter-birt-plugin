@@ -73,6 +73,10 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	
 	protected boolean outputCurrentTable;
 	
+	protected String delimiter = null;
+	
+	protected String replaceDelimiterInsideTextWith = null;
+	
 	public CSVReportEmitter( )
 	{
 		contentVisitor = new ContentEmitterVisitor( this );
@@ -94,14 +98,32 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		logger.log( Level.FINE,"Starting CSVReportEmitter." );
 		
 		this.report = report;
+		
 		this.renderOption = report.getReportContext().getRenderOption();
-		this.tableToOutput= (String)renderOption.getOption(ICSVRenderOption.EXPORT_TABLE_BY_NAME);
+		
+		this.tableToOutput= (String)renderOption.getOption(ICSVRenderOption.EXPORT_TABLE_BY_NAME);		
 		
 		// Setting tableToOutput to Default as user has not set any Render Option to Output a specific Table
-		if(tableToOutput == null){
+		if(tableToOutput == null)
+		{
 			this.tableToOutput="Default";
 		}
 		
+		this.delimiter = (String)renderOption.getOption(ICSVRenderOption.DELIMITER);
+		
+		// Setting Default Field Delimiter if user has not specified any Delimiter
+		if(delimiter == null)
+		{
+			delimiter = CSVTags.TAG_COMMA;
+		}
+		
+		this.replaceDelimiterInsideTextWith = (String)renderOption.getOption(ICSVRenderOption.REPLACE_DELIMITER_INSIDE_TEXT_WITH);
+		
+		// Setting Default Value Blank Space if user has not specified any value to replace the delimiter if it occurs inside text
+		if(replaceDelimiterInsideTextWith == null)
+		{
+			replaceDelimiterInsideTextWith = " ";
+		}
 		writer.open( out, "UTF-8" );
 		writer.startWriter( );
 	}
@@ -113,6 +135,12 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		writer.endWriter( );
 		writer.close( );
 		
+		// Informing user if Table Name provided in Render Option is not found and Blank Report is getting generated
+		if(tableToOutput != "Default" && report.getDesign().getReportDesign().findElement(tableToOutput) == null)
+		{
+			System.out.println(tableToOutput + " Table not found in Report Design. Blank Report Generated!!");
+			logger.log(Level.WARNING, tableToOutput+ " Table not found in Report Design. Blank Report Generated!!");
+		}
 		if( out != null )
 		{
 			try
@@ -125,6 +153,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 			}
 		}
 	}
+	
 	public void startPage( IPageContent page ) throws BirtException
 	{
 		logger.log( Level.FINE,"CSVReportEmitter startPage" );
@@ -160,15 +189,15 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		
 		if(tableToOutput.equals("Default") && table.getInstanceID().getComponentID() == firstTableID)
 		{
-			this.outputCurrentTable=true;
+			this.outputCurrentTable = true;
 		}
 		else if(currentTableName != null && currentTableName.equals(this.tableToOutput))
 		{
-			this.outputCurrentTable=true;
+			this.outputCurrentTable = true;
 		}
 		else
 		{
-			this.outputCurrentTable=false;
+			this.outputCurrentTable = false;
 		}			
 	}	
 
@@ -203,7 +232,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		
 		if ( writeData )
 		{
-			writer.text( textValue );
+			writer.text( textValue, delimiter, replaceDelimiterInsideTextWith );
 			currentColumn++;			
 		}
 	}
@@ -219,7 +248,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		
 		if ( ( currentColumn < totalColumns )&& writeData )
 		{
-			writer.closeTag( CSVTags.TAG_COMMA );
+			writer.closeTag( delimiter );
 		}		
 	}
 	
@@ -351,10 +380,10 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 				String dataType=resultSetMetaDatacolumnsWithDataType.get(columnNamesInTableOrder.get(i));
 				
 				if(dataType != null)
-					writer.print(dataType);
+					writer.text(dataType,delimiter, replaceDelimiterInsideTextWith);
 				
 				if(i < columnNamesInTableOrder.size()-1)
-					writer.closeTag(CSVTags.TAG_COMMA);
+					writer.closeTag(delimiter);
 				else
 					writer.closeTag(CSVTags.TAG_CR);
 			}
