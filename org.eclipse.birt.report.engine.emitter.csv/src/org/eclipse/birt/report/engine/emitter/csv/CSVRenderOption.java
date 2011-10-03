@@ -37,7 +37,8 @@ public class CSVRenderOption extends RenderOption implements ICSVRenderOption{
 	 * 
 	 * @param
 	 */
-	public boolean getShowDatatypeInSecondRow() {
+	public boolean getShowDatatypeInSecondRow() 
+	{
 		return getBooleanOption(SHOW_DATATYPE_IN_SECOND_ROW, true);
 	}
 
@@ -46,9 +47,9 @@ public class CSVRenderOption extends RenderOption implements ICSVRenderOption{
 	 * 
 	 * @param tableName
 	 */
-	public void setExportTableByName(String tableName) {
-		setOption(EXPORT_TABLE_BY_NAME,tableName);
-		
+	public void setExportTableByName(String tableName)
+	{
+		setOption(EXPORT_TABLE_BY_NAME,tableName);		
 	}
 
 	/**
@@ -56,7 +57,48 @@ public class CSVRenderOption extends RenderOption implements ICSVRenderOption{
 	 * 
 	 * @param
 	 */
-	public String getExportTableByName() {
+	public String getExportTableByName()
+	{
 		return getStringOption(EXPORT_TABLE_BY_NAME);
+	}
+	
+	/**
+	 * Set Field Delimiter Option
+	 * 
+	 * @param fieldDelimiter
+	 */
+	public void setDelimiter(String fieldDelimiter)
+	{
+		setOption(DELIMITER,fieldDelimiter);
+	}
+
+	/**
+	 * Get Field Delimiter Option
+	 * 
+	 * @param
+	 */
+	public String getDelimiter()
+	{		
+		return getStringOption(DELIMITER);
+	}
+
+	/**
+	 * Set Replace Delimiter Inside Text With Option
+	 * 
+	 * @param replaceDelimiterInsideTextWith
+	 */
+	public void setReplaceDelimiterInsideTextWith(String replaceDelimiterInsideTextWith)
+	{
+		setOption(REPLACE_DELIMITER_INSIDE_TEXT_WITH, replaceDelimiterInsideTextWith);		
+	}
+
+	/**
+	 * Get Replace Delimiter Inside Text With Option
+	 * 
+	 * @param
+	 */
+	public String getReplaceDelimiterInsideTextWith()
+	{
+		return getStringOption(REPLACE_DELIMITER_INSIDE_TEXT_WITH);
 	}
 }
