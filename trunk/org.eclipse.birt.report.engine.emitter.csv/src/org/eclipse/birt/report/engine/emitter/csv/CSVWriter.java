@@ -36,13 +36,13 @@ public class CSVWriter extends XMLWriter{
 		super.close();
 	}
 
-	public void text(String textValue) {
+	public void text(String textValue, String delimiter, String replaceDelimiterInsideTextWith) {
 		if ( textValue == null || textValue.length( ) == 0 )
 		{
 			return;
 		}		
-		// Replacing comma in Cell Data with Space for CSVWriter
-		textValue = textValue.replace(","," ");		
+		// Replacing delimiter in Cell Data with user defined character for CSVWriter
+		textValue = textValue.replace(delimiter,replaceDelimiterInsideTextWith);		
 		print( textValue );		
 	}
 
