@@ -67,7 +67,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 	
 	protected boolean writeData = true;
 	
-	protected Boolean showDatatypeInSecondRow;
+	protected Boolean showDatatypeInSecondRow = false;
 	
 	protected String tableToOutput;
 	
@@ -124,6 +124,14 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		{
 			replaceDelimiterInsideTextWith = " ";
 		}
+		
+		// checking csv render option if set to export data type in second row of the output
+		this.showDatatypeInSecondRow = (Boolean)renderOption.getOption(ICSVRenderOption.SHOW_DATATYPE_IN_SECOND_ROW);
+		
+		// Setting Default value to false if user has not specified aany value
+		if(showDatatypeInSecondRow == null)
+			showDatatypeInSecondRow = false;
+		
 		writer.open( out, "UTF-8" );
 		writer.startWriter( );
 	}
@@ -206,10 +214,7 @@ public class CSVReportEmitter extends ContentEmitterAdapter
 		assert row != null;
 		
 		if ( isRowInFooter( row ) || isRowInHeaderExceptFirstHeader(row) || outputCurrentTable!=true)
-			writeData = false;
-		
-		// checking csv render option if set to export data type in second row of the output
-		showDatatypeInSecondRow = (Boolean)renderOption.getOption(ICSVRenderOption.SHOW_DATATYPE_IN_SECOND_ROW);
+			writeData = false;		
 		
 		// rowID will be 1 for the first data row, before printing the data row we need to print the datatype
 		// printDatatypeInSecondRow will be called only once
